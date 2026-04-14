@@ -1,0 +1,10 @@
+DROP INDEX IF EXISTS idx_audit_logs_created_at;
+DROP INDEX IF EXISTS idx_audit_logs_user_id;
+DROP INDEX IF EXISTS idx_audit_logs_tenant_id;
+DROP INDEX IF EXISTS idx_user_roles_tenant_id;
+DROP INDEX IF EXISTS idx_user_roles_role_id;
+DROP INDEX IF EXISTS idx_user_roles_user_id;
+DROP INDEX IF EXISTS idx_roles_tenant_id;
+DROP INDEX IF EXISTS idx_users_status;
+DROP INDEX IF EXISTS idx_users_tenant_id;
+DROP INDEX IF EXISTS idx_users_email;

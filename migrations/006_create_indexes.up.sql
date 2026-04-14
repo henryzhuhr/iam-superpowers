@@ -1,0 +1,10 @@
+CREATE INDEX idx_users_email ON users(email);
+CREATE INDEX idx_users_tenant_id ON users(tenant_id);
+CREATE INDEX idx_users_status ON users(status);
+CREATE INDEX idx_roles_tenant_id ON roles(tenant_id);
+CREATE INDEX idx_user_roles_user_id ON user_roles(user_id);
+CREATE INDEX idx_user_roles_role_id ON user_roles(role_id);
+CREATE INDEX idx_user_roles_tenant_id ON user_roles(tenant_id);
+CREATE INDEX idx_audit_logs_tenant_id ON audit_logs(tenant_id);
+CREATE INDEX idx_audit_logs_user_id ON audit_logs(user_id);
+CREATE INDEX idx_audit_logs_created_at ON audit_logs(created_at DESC);
