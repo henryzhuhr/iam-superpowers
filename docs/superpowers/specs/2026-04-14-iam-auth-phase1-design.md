@@ -11,7 +11,6 @@
 构建一个安全、可扩展的 IAM（身份和访问管理）认证服务的第一阶段。Phase 1 聚焦于核心认证能力：邮箱注册/登录、密码管理、JWT 双 Token 认证、基础用户资料、邮箱验证、简单租户模型和基础 RBAC 角色。
 
 ### 1.1 核心决策
-
 | 决策项 | 选择 |
 |--------|------|
 | 开发模式 | 分阶段迭代 |
@@ -33,6 +32,7 @@
 - 基础用户资料（头像、姓名、联系方式）
 - 租户模型（tenant_id 字段，租户创建与管理）
 - 基础 RBAC 角色（角色定义、用户-角色绑定）
+- Web 管理控制台（Vue3 + TypeScript）
 
 ---
 
@@ -60,12 +60,26 @@ iam-superpowers/
 │   │   ├── domain/
 │   │   ├── repository/
 │   │   └── service/
+│   ├── audit/                  # Audit 领域（操作日志）
+│   │   ├── domain/
+│   │   ├── repository/
+│   │   └── service/
 │   └── common/                 # 共享基础设施
 │       ├── database/           # PostgreSQL 连接
 │       ├── redis/              # Redis 连接
 │       ├── jwt/                # JWT 签发/验证
 │       ├── email/              # 邮件发送（验证码）
 │       └── errors/             # 统一错误处理
+├── web/                      # 前端管理控制台（Vue3 + TypeScript）
+│   ├── src/
+│   │   ├── views/            # 页面组件
+│   │   ├── components/       # 可复用组件
+│   │   ├── router/           # 路由配置
+│   │   ├── store/            # Pinia 状态管理
+│   │   ├── api/              # API 调用封装
+│   │   └── types/            # TypeScript 类型定义
+│   ├── package.json
+│   └── vite.config.ts
 ├── migrations/                 # golang-migrate SQL 文件
 ├── configs/                    # 配置文件
 ├── tests/e2e/                  # Python 端到端测试
@@ -130,6 +144,20 @@ iam-superpowers/
 | tenant_id | UUID | 租户 ID（冗余字段，用于查询优化） |
 | created_at | TIMESTAMP | 创建时间 |
 
+### 3.5 AuditLog（操作日志）
+
+| 字段 | 类型 | 说明 |
+|------|------|------|
+| id | UUID | 主键 |
+| tenant_id | UUID | 租户 ID |
+| user_id | UUID | 操作者用户 ID |
+| action | VARCHAR(100) | 操作类型（如 user.create, role.assign） |
+| target_type | VARCHAR(50) | 目标类型（如 user, role, tenant） |
+| target_id | UUID | 目标 ID |
+| details | JSONB | 操作详情 |
+| ip_address | VARCHAR(45) | 操作者 IP |
+| created_at | TIMESTAMP | 操作时间 |
+
 ---
 
 ## 4. API 端点
@@ -153,6 +181,24 @@ iam-superpowers/
 | `/api/v1/users/me` | GET | 获取当前用户信息 | JWT |
 | `/api/v1/users/me` | PUT | 更新当前用户信息 | JWT |
 | `/api/v1/users/me/password` | PUT | 修改密码 | JWT |
+
+### 4.3 管理控制台 API（管理员专用）
+
+| 端点 | 方法 | 说明 | 认证要求 |
+|------|------|------|----------|
+| `/api/v1/admin/users` | GET | 用户列表（分页、搜索、过滤） | JWT + Admin Role |
+| `/api/v1/admin/users/:id` | GET | 用户详情 | JWT + Admin Role |
+| `/api/v1/admin/users/:id` | PUT | 编辑用户信息 | JWT + Admin Role |
+| `/api/v1/admin/users/:id/status` | PUT | 禁用/启用用户 | JWT + Admin Role |
+| `/api/v1/admin/users/:id/reset-password` | POST | 管理员重置密码 | JWT + Admin Role |
+| `/api/v1/admin/users/:id/roles` | GET | 获取用户角色 | JWT + Admin Role |
+| `/api/v1/admin/users/:id/roles` | PUT | 分配用户角色 | JWT + Admin Role |
+| `/api/v1/admin/tenants` | GET | 租户列表 | JWT + Admin Role |
+| `/api/v1/admin/tenants` | POST | 创建租户 | JWT + Admin Role |
+| `/api/v1/admin/tenants/:id` | GET | 租户详情 | JWT + Admin Role |
+| `/api/v1/admin/roles` | GET | 角色列表 | JWT + Admin Role |
+| `/api/v1/admin/roles` | POST | 创建角色 | JWT + Admin Role |
+| `/api/v1/admin/audit-logs` | GET | 操作日志列表 | JWT + Admin Role |
 
 ---
 
@@ -308,7 +354,64 @@ HTTP 状态码约定：
 
 ---
 
-## 9. Phase 2+ 预留（不做实现）
+## 9. 管理控制台（Web 前端）
+
+### 9.1 技术栈
+
+- **框架**：Vue 3 + TypeScript
+- **构建工具**：Vite
+- **UI 组件库**：Element Plus（或 Ant Design Vue）
+- **状态管理**：Pinia
+- **路由**：Vue Router
+- **HTTP 客户端**：Axios
+
+### 9.2 页面结构
+
+| 页面 | 路由 | 说明 |
+|------|------|------|
+| 登录页 | `/login` | 管理员登录 |
+| 仪表盘 | `/dashboard` | 概览统计（用户数、租户数、最近活动） |
+| 用户管理 | `/users` | 用户列表（搜索、过滤、分页）、用户详情编辑 |
+| 租户管理 | `/tenants` | 租户列表、创建租户、租户详情 |
+| 角色管理 | `/roles` | 角色列表、创建角色、角色分配 |
+| 操作日志 | `/audit-logs` | 操作日志列表（时间范围筛选） |
+
+### 9.3 功能清单
+
+**用户管理**：
+- 用户列表（支持按邮箱搜索、按状态过滤、分页）
+- 查看用户详情（基本信息、角色、状态）
+- 编辑用户信息（姓名、头像、联系方式）
+- 禁用/启用用户
+- 管理员重置用户密码
+- 分配/移除用户角色
+
+**租户管理**：
+- 租户列表（搜索、分页）
+- 创建新租户（名称、unique_code、自定义域名）
+- 查看租户详情
+
+**角色管理**：
+- 角色列表（按租户过滤）
+- 创建自定义角色（名称、描述）
+- 查看角色详情
+
+**操作日志**：
+- 日志列表（时间范围筛选、按操作者搜索）
+- 查看操作详情
+
+### 9.4 前端认证流程
+
+- 登录页输入邮箱密码 → 调用 `/auth/login` → 获取 Access Token + Refresh Token
+- Access Token 存 localStorage/sessionStorage
+- Refresh Token 存 httpOnly Cookie 或 localStorage
+- Axios 拦截器自动附加 `Authorization: Bearer <token>`
+- 401 时自动调用 `/auth/refresh` 刷新 Token
+- 刷新失败则跳转登录页
+
+---
+
+## 10. Phase 2+ 预留（不做实现）
 
 以下能力在后续阶段添加，Phase 1 仅做结构预留：
 
@@ -318,5 +421,5 @@ HTTP 状态码约定：
 - 细粒度权限（permission）管理
 - Webhook 事件通知
 - 自定义域名路由
-- 审计日志
 - 国际化（i18n）
+- SDK 支持（JS、Python、Go）
