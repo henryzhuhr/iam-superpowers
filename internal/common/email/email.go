@@ -1,6 +1,7 @@
 package email
 
 import (
+	"crypto/tls"
 	"fmt"
 
 	"github.com/henryzhuhr/iam-superpowers/internal/common/config"
@@ -27,5 +28,10 @@ func (s *Service) SendVerificationCode(to string, code string) error {
 	`, code))
 
 	d := gomail.NewDialer(s.cfg.Host, s.cfg.Port, s.cfg.User, s.cfg.Password)
+	if s.cfg.UseTLS {
+		d.TLSConfig = &tls.Config{ServerName: s.cfg.Host}
+	} else {
+		d.TLSConfig = nil
+	}
 	return d.DialAndSend(m)
 }

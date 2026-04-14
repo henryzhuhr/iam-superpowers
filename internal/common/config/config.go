@@ -72,6 +72,18 @@ func Load(path string) (*Config, error) {
 	v.BindEnv("jwt.secret", "JWT_SECRET")
 	v.BindEnv("server.port", "SERVER_PORT")
 	v.BindEnv("server.mode", "SERVER_MODE")
+	v.BindEnv("database.maxConnections", "DB_MAX_CONNECTIONS")
+	v.BindEnv("database.idleTimeout", "DB_IDLE_TIMEOUT")
+	v.BindEnv("redis.db", "REDIS_DB")
+	v.BindEnv("redis.password", "REDIS_PASSWORD")
+	v.BindEnv("jwt.accessTokenTTL", "JWT_ACCESS_TOKEN_TTL")
+	v.BindEnv("jwt.refreshTokenTTL", "JWT_REFRESH_TOKEN_TTL")
+	v.BindEnv("smtp.host", "SMTP_HOST")
+	v.BindEnv("smtp.port", "SMTP_PORT")
+	v.BindEnv("smtp.user", "SMTP_USER")
+	v.BindEnv("smtp.password", "SMTP_PASSWORD")
+	v.BindEnv("smtp.from", "SMTP_FROM")
+	v.BindEnv("smtp.useTLS", "SMTP_USE_TLS")
 
 	if path != "" {
 		v.SetConfigFile(path)
