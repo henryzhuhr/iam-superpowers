@@ -347,10 +347,104 @@ HTTP 状态码约定：
 - 通过 HTTP API 调用测试完整流程
 - 测试用例覆盖：注册、登录、Token 刷新、登出、密码管理、邮箱验证
 
-### 8.3 部署
+### 8.3 开发环境管理
 
-- `docker-compose.yml`：PostgreSQL + Redis
-- `Makefile`：构建、测试、迁移、运行
+**基础设施（docker-compose.yml）**：
+
+```yaml
+services:
+  postgres:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_DB: iam_dev
+      POSTGRES_USER: iam_user
+      POSTGRES_PASSWORD: iam_pass
+    ports:
+      - "5432:5432"
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+
+  redis:
+    image: redis:7-alpine
+    ports:
+      - "6379:6379"
+
+  maildev:                    # 开发用 SMTP 服务器
+    image: maildev/maildev
+    ports:
+      - "1080:1080"           # Web UI 查看邮件
+      - "1025:1025"           # SMTP 端口
+```
+
+**环境变量（.env.example）**：
+
+```env
+# 数据库
+DB_HOST=localhost
+DB_PORT=5432
+DB_NAME=iam_dev
+DB_USER=iam_user
+DB_PASSWORD=iam_pass
+DB_SSLMODE=disable
+
+# Redis
+REDIS_HOST=localhost
+REDIS_PORT=6379
+
+# JWT
+JWT_SECRET=change-me-in-production
+JWT_ACCESS_TOKEN_TTL=900      # 15 分钟（秒）
+JWT_REFRESH_TOKEN_TTL=604800  # 7 天（秒）
+
+# SMTP（开发环境用 MailDev）
+SMTP_HOST=localhost
+SMTP_PORT=1025
+SMTP_USER=
+SMTP_PASSWORD=
+SMTP_FROM=noreply@iam.local
+SMTP_USE_TLS=false
+
+# 服务
+SERVER_PORT=8080
+```
+
+开发者首次设置流程：
+```bash
+cp .env.example .env          # 复制配置模板
+make up                       # 启动 PostgreSQL + Redis + MailDev
+make migrate-up               # 执行数据库迁移
+make run                      # 启动 Go 后端服务（localhost:8080）
+make run-web                  # 启动前端开发服务器（localhost:5173）
+```
+
+**Makefile 命令**：
+
+| 命令 | 功能 |
+|------|------|
+| `make up` | 启动 docker-compose 依赖服务 |
+| `make down` | 停止依赖服务 |
+| `make migrate-up` | 执行数据库向上迁移 |
+| `make migrate-down` | 回滚最后一次迁移 |
+| `make migrate-create <name>` | 创建新的迁移文件 |
+| `make run` | 启动 Go 后端（热重载：`air`） |
+| `make run-web` | 启动 Vue 前端开发服务器 |
+| `make test` | 运行 Go 单元测试 |
+| `make test-e2e` | 运行 Python 端到端测试 |
+| `make build` | 构建 Go 二进制 |
+| `make build-web` | 构建 Vue 前端静态文件 |
+
+**数据库访问方式**：
+
+- Go 服务通过 `database/sql` + `pgx` 驱动连接 PostgreSQL
+- 连接池配置：最大连接数 25，空闲超时 5 分钟
+- Redis 通过 `go-redis` 客户端连接
+- 连接信息从 `viper` 读取环境变量
+- 本地开发时 Go 进程直连 Docker 暴露的端口（localhost:5432, localhost:6379）
+
+**热重载**：
+
+- Go 后端使用 `air` 工具实现代码变更自动重启
+- Vue 前端使用 Vite HMR（热模块替换）
 
 ---
 
