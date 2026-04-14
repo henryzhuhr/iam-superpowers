@@ -1,1 +1,18 @@
+# Go
+bin/
+
+# Environment
+.env
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# macOS
+.DS_Store
+
+# Local settings
 .claude/settings.local.json

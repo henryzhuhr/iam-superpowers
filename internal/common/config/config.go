@@ -2,6 +2,7 @@ package config
 
 import (
 	"fmt"
+	"os"
 
 	"github.com/spf13/viper"
 )
@@ -55,10 +56,7 @@ type ServerConfig struct {
 func Load(path string) (*Config, error) {
 	v := viper.New()
 
-	v.SetConfigName("config")
 	v.SetConfigType("yaml")
-	v.AddConfigPath("./configs")
-	v.AddConfigPath(".")
 
 	v.AutomaticEnv()
 	v.BindEnv("database.host", "DB_HOST")
@@ -86,7 +84,14 @@ func Load(path string) (*Config, error) {
 	v.BindEnv("smtp.useTLS", "SMTP_USE_TLS")
 
 	if path != "" {
-		v.SetConfigFile(path)
+		if _, err := os.Stat(path); err == nil {
+			v.SetConfigFile(path)
+		}
+		// If file doesn't exist, skip config file loading — viper falls back to env/defaults
+	} else {
+		v.SetConfigName("config")
+		v.AddConfigPath("./configs")
+		v.AddConfigPath(".")
 	}
 
 	if err := v.ReadInConfig(); err != nil {
