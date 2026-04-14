@@ -53,7 +53,13 @@ func RequireRole(role string) gin.HandlerFunc {
 			return
 		}
 
-		claims := claimsVal.(*jwt.Claims)
+		claims, ok := claimsVal.(*jwt.Claims)
+		if !ok {
+			er.RespondError(c, er.NewInternalError("invalid claims type"))
+			c.Abort()
+			return
+		}
+
 		for _, r := range claims.Roles {
 			if r == role {
 				c.Next()
