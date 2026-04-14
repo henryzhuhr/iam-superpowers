@@ -165,7 +165,8 @@ Client → POST /auth/register(email, password, tenant_code)
   → handler 校验输入格式
   → service 根据 tenant_code 查找租户
   → service 检查 email 是否已存在（同一租户内唯一）
-  → domain: User.Create() 生成 password_hash(bcrypt), email_verification_code
+  → domain: User.Create() 生成 password_hash(bcrypt)
+  → 生成 6 位数字验证码存 Redis, key: email_verify:{email}, TTL 5min
   → repository: Save User
   → email service 发送验证码邮件
   → 返回 201 { user_id, message }
