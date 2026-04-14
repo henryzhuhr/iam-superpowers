@@ -1,0 +1,32 @@
+database:
+  host: localhost
+  port: 5432
+  name: iam_dev
+  user: iam_user
+  password: iam_pass
+  sslmode: disable
+  maxConnections: 25
+  idleTimeout: 300
+
+redis:
+  host: localhost
+  port: 6379
+  db: 0
+  password: ""
+
+jwt:
+  secret: change-me-in-production
+  accessTokenTTL: 900
+  refreshTokenTTL: 604800
+
+smtp:
+  host: localhost
+  port: 1025
+  user: ""
+  password: ""
+  from: noreply@iam.local
+  useTLS: false
+
+server:
+  port: 8080
+  mode: debug
