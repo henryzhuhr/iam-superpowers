@@ -341,13 +341,54 @@ HTTP 状态码约定：
 - 领域层（domain）重点测试业务逻辑
 - Service 层使用 mock repository 测试
 
-### 8.2 端到端测试
+### 8.2 端到端测试（后端 API）
 
 - Python + pytest + uv 包管理
 - 通过 HTTP API 调用测试完整流程
 - 测试用例覆盖：注册、登录、Token 刷新、登出、密码管理、邮箱验证
 
-### 8.3 开发环境管理
+### 8.3 前端 E2E 测试（Playwright）— 自动化回归
+
+- 前端项目内使用 **Playwright** 编写浏览器级端到端测试
+- 测试运行在 headless 模式，CI 可集成
+- 每个页面至少覆盖以下场景：
+
+| 测试场景 | 验证内容 |
+|----------|----------|
+| 登录页 | 正常登录、错误密码、账号不存在、Token 过期跳转 |
+| 仪表盘 | 数据统计显示、最近活动列表 |
+| 用户管理 | 列表渲染、搜索过滤、分页、查看详情、编辑信息、禁用/启用、重置密码、角色分配 |
+| 租户管理 | 列表渲染、创建租户、查看详情 |
+| 角色管理 | 列表渲染、创建角色、查看详情 |
+| 操作日志 | 列表渲染、时间范围筛选、按操作者搜索 |
+| Token 刷新 | Access Token 过期后自动刷新、Refresh Token 过期跳转登录 |
+
+- `make test-e2e-web`：启动后端 + 前端 + 数据库，运行 Playwright 测试
+- 所有 Playwright 用例必须通过才能合入代码
+
+### 8.4 前端页面验证（agent-browser）— 半自动化检查
+
+- 使用 `agent-browser` 技能进行页面验证
+- 在每个功能页面开发完成后，用 agent-browser 打开对应页面，验证：
+  - 页面布局符合预期（导航栏、表格、表单、按钮）
+  - 交互行为正常（点击按钮、填写表单、弹窗、错误提示）
+  - 路由跳转正确（登录→仪表盘、侧边栏切换页面）
+  - 响应式布局在常见分辨率下无错乱
+- 作为 Playwright 的补充，覆盖那些**难以用代码断言的视觉和交互细节**
+- 开发过程中和 Playwright 测试通过后，均需 agent-browser 验证通过
+
+### 8.5 测试通过标准
+
+每个功能模块合入前需满足：
+
+1. Go 单元测试通过（`make test`）
+2. Python 后端 E2E 测试通过（`make test-e2e`）
+3. Playwright 前端 E2E 测试通过（`make test-e2e-web`）
+4. agent-browser 页面验证通过（`make test-web-visual`）
+
+四项全部通过方可视为完成。
+
+### 8.6 开发环境管理
 
 **基础设施（docker-compose.yml）**：
 
@@ -429,7 +470,9 @@ make run-web                  # 启动前端开发服务器（localhost:5173）
 | `make run` | 启动 Go 后端（热重载：`air`） |
 | `make run-web` | 启动 Vue 前端开发服务器 |
 | `make test` | 运行 Go 单元测试 |
-| `make test-e2e` | 运行 Python 端到端测试 |
+| `make test-e2e` | 运行 Python 端到端测试（后端 API） |
+| `make test-e2e-web` | 运行 Playwright 前端 E2E 测试 |
+| `make test-web-visual` | 运行 agent-browser 半自动化页面验证 |
 | `make build` | 构建 Go 二进制 |
 | `make build-web` | 构建 Vue 前端静态文件 |
 
