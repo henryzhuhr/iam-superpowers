@@ -64,19 +64,19 @@ func main() {
 	jwtSvc := jwt.New(cfg.JWT)
 	emailSvc := email.New(cfg.SMTP)
 
+	// Tenant module (needed by auth handler for tenant_code lookup)
+	tenantRepo := tenantrepo.NewTenantRepository(db)
+	tenantSvc := tenantservice.NewTenantService(tenantRepo)
+	tenantH := tenanthandler.NewTenantHandler(tenantSvc)
+
 	// Auth module
 	userRepo := authrepo.NewUserRepository(db)
 	authSvc := authservice.NewAuthService(userRepo, jwtSvc, emailSvc, redis.RDB())
-	authH := authhandler.NewAuthHandler(authSvc)
+	authH := authhandler.NewAuthHandler(authSvc, tenantRepo)
 
 	// User module
 	userSvc := userservice.NewUserService(userRepo)
 	userH := userhandler.NewUserHandler(userSvc)
-
-	// Tenant module
-	tenantRepo := tenantrepo.NewTenantRepository(db)
-	tenantSvc := tenantservice.NewTenantService(tenantRepo)
-	tenantH := tenanthandler.NewTenantHandler(tenantSvc)
 
 	// Role module
 	roleRepo := rolerepo.NewRoleRepository(db)
@@ -88,7 +88,7 @@ func main() {
 	auditH := audithandler.NewAuditHandler(auditSvc)
 
 	// Admin module
-	adminH := handler.NewAdminHandler(userRepo, roleSvc, tenantSvc)
+	adminH := handler.NewAdminHandler(userRepo, roleSvc, tenantSvc, auditSvc)
 
 	// Setup Gin
 	gin.SetMode(cfg.Server.Mode)
@@ -106,6 +106,8 @@ func main() {
 		auth.POST("/login", authH.Login)
 		auth.POST("/refresh", authH.Refresh)
 		auth.POST("/verify-email", authH.VerifyEmail)
+		auth.POST("/forgot-password", authH.ForgotPassword)
+		auth.POST("/reset-password", authH.ResetPassword)
 	}
 
 	// Authenticated routes

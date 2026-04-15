@@ -9,6 +9,7 @@ import (
 	"github.com/gin-gonic/gin"
 	"github.com/google/uuid"
 	"golang.org/x/crypto/bcrypt"
+	auditservice "github.com/henryzhuhr/iam-superpowers/internal/audit/service"
 	authdomain "github.com/henryzhuhr/iam-superpowers/internal/auth/domain"
 	authrepo "github.com/henryzhuhr/iam-superpowers/internal/auth/repository"
 	apierrors "github.com/henryzhuhr/iam-superpowers/internal/common/errors"
@@ -21,13 +22,15 @@ type AdminHandler struct {
 	userRepo   authrepo.UserRepository
 	roleSvc    *roleservice.RoleService
 	tenantSvc  *tenantservice.TenantService
+	auditSvc   *auditservice.AuditService
 }
 
-func NewAdminHandler(userRepo authrepo.UserRepository, roleSvc *roleservice.RoleService, tenantSvc *tenantservice.TenantService) *AdminHandler {
+func NewAdminHandler(userRepo authrepo.UserRepository, roleSvc *roleservice.RoleService, tenantSvc *tenantservice.TenantService, auditSvc *auditservice.AuditService) *AdminHandler {
 	return &AdminHandler{
 		userRepo:  userRepo,
 		roleSvc:   roleSvc,
 		tenantSvc: tenantSvc,
+		auditSvc:  auditSvc,
 	}
 }
 
@@ -51,14 +54,51 @@ func (h *AdminHandler) ListUsers(c *gin.Context) {
 		return
 	}
 
-	// TODO: implement filtered listing in repository
-	// For now, return empty placeholder
-	_ = tenantID
-	_ = search
-	_ = status
+	filter := authrepo.ListUsersFilter{
+		TenantID: tenantID,
+		Email:    search,
+		Status:   status,
+		Offset:   offset,
+		Limit:    limit,
+	}
+
+	users, count, err := h.userRepo.ListUsers(c.Request.Context(), filter)
+	if err != nil {
+		apierrors.RespondError(c, apierrors.NewInternalError("failed to list users"))
+		return
+	}
+
+	// Strip password hash from response
+	type safeUser struct {
+		ID            uuid.UUID `json:"id"`
+		TenantID      uuid.UUID `json:"tenant_id"`
+		Email         string    `json:"email"`
+		Name          string    `json:"name"`
+		AvatarURL     string    `json:"avatar_url"`
+		Status        string    `json:"status"`
+		EmailVerified bool      `json:"email_verified"`
+		CreatedAt     time.Time `json:"created_at"`
+		UpdatedAt     time.Time `json:"updated_at"`
+	}
+
+	result := make([]safeUser, 0, len(users))
+	for _, u := range users {
+		result = append(result, safeUser{
+			ID:            u.ID,
+			TenantID:      u.TenantID,
+			Email:         u.Email,
+			Name:          u.Name,
+			AvatarURL:     u.AvatarURL,
+			Status:        string(u.Status),
+			EmailVerified: u.EmailVerified,
+			CreatedAt:     u.CreatedAt,
+			UpdatedAt:     u.UpdatedAt,
+		})
+	}
+
 	apierrors.Respond(c, http.StatusOK, gin.H{
-		"users":  []interface{}{},
-		"total":  0,
+		"users":  result,
+		"total":  count,
 		"offset": offset,
 		"limit":  limit,
 	})
@@ -439,14 +479,19 @@ func (h *AdminHandler) ListAuditLogs(c *gin.Context) {
 		limit = 20
 	}
 
-	// TODO: inject audit service
-	_ = tenantID
-	_ = startTime
-	_ = endTime
-	_ = offset
-	_ = limit
+	logs, count, err := h.auditSvc.ListLogs(c.Request.Context(), tenantID, startTime, endTime, offset, limit)
+	if err != nil {
+		var apiErr *apierrors.APIError
+		if errors.As(err, &apiErr) {
+			apierrors.RespondError(c, apiErr)
+			return
+		}
+		apierrors.RespondError(c, apierrors.NewInternalError("failed to list audit logs"))
+		return
+	}
+
 	apierrors.Respond(c, http.StatusOK, gin.H{
-		"logs":  []interface{}{},
-		"total": 0,
+		"logs":  logs,
+		"total": count,
 	})
 }

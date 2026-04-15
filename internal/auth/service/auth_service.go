@@ -168,6 +168,65 @@ func (s *AuthService) VerifyEmail(ctx context.Context, email, code string) error
 	return nil
 }
 
+// ForgotPassword generates a reset token for the given email and stores it in Redis.
+func (s *AuthService) ForgotPassword(ctx context.Context, email string) error {
+	user, err := s.userRepo.FindByEmail(ctx, email)
+	if err != nil {
+		return errors.NewInternalError("failed to find user")
+	}
+	if user == nil {
+		// Return nil to avoid leaking email existence
+		return nil
+	}
+
+	resetToken := uuid.New().String()
+	s.redis.Set(ctx, fmt.Sprintf("password_reset:%s", resetToken), user.ID.String(), 15*time.Minute)
+
+	// Send reset email (best-effort; email send errors are logged)
+	go func() {
+		if err := s.emailSvc.SendVerificationCode(email, resetToken); err != nil {
+			slog.Error("failed to send password reset email", "email", email, "error", err)
+		}
+	}()
+
+	return nil
+}
+
+// ResetPassword validates the reset token and updates the user's password.
+func (s *AuthService) ResetPassword(ctx context.Context, token, newPassword string) error {
+	userIDStr, err := s.redis.Get(ctx, fmt.Sprintf("password_reset:%s", token)).Result()
+	if err == redis.Nil {
+		return errors.NewValidationError("invalid or expired reset token")
+	}
+	if err != nil {
+		return errors.NewInternalError("failed to validate reset token")
+	}
+
+	userID, err := uuid.Parse(userIDStr)
+	if err != nil {
+		return errors.NewInternalError("invalid reset token")
+	}
+
+	user, err := s.userRepo.FindByID(ctx, userID)
+	if err != nil {
+		return errors.NewInternalError("failed to find user")
+	}
+	if user == nil {
+		return errors.NewNotFoundError("user not found")
+	}
+
+	if err := user.ChangePassword("", newPassword); err != nil {
+		if err == domain.ErrWeakPassword {
+			return errors.NewValidationError(err.Error())
+		}
+		return errors.NewInternalError("failed to reset password")
+	}
+
+	s.redis.Del(ctx, fmt.Sprintf("password_reset:%s", token))
+
+	return s.userRepo.Update(ctx, user)
+}
+
 // generateVerificationCode generates a cryptographically secure 6-digit code.
 func generateVerificationCode() (string, error) {
 	n, err := rand.Int(rand.Reader, big.NewInt(1000000))

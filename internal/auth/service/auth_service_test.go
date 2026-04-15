@@ -6,6 +6,7 @@ import (
 
 	"github.com/google/uuid"
 	"github.com/henryzhuhr/iam-superpowers/internal/auth/domain"
+	"github.com/henryzhuhr/iam-superpowers/internal/auth/repository"
 	"github.com/henryzhuhr/iam-superpowers/internal/common/config"
 	"github.com/henryzhuhr/iam-superpowers/internal/common/email"
 	"github.com/henryzhuhr/iam-superpowers/internal/common/jwt"
@@ -43,6 +44,19 @@ func (m *mockUserRepo) FindByID(ctx context.Context, id uuid.UUID) (*domain.User
 func (m *mockUserRepo) Update(ctx context.Context, user *domain.User) error {
 	args := m.Called(ctx, user)
 	return args.Error(0)
+}
+
+func (m *mockUserRepo) FindByEmail(ctx context.Context, email string) (*domain.User, error) {
+	args := m.Called(ctx, email)
+	if args.Get(0) == nil {
+		return nil, args.Error(1)
+	}
+	return args.Get(0).(*domain.User), args.Error(1)
+}
+
+func (m *mockUserRepo) ListUsers(ctx context.Context, filter repository.ListUsersFilter) ([]*domain.User, int, error) {
+	args := m.Called(ctx, filter)
+	return args.Get(0).([]*domain.User), args.Int(1), args.Error(2)
 }
 
 func setupAuthService(t *testing.T) (*AuthService, *mockUserRepo, *redis.Client) {
