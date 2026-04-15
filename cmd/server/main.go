@@ -1,8 +1,13 @@
 package main
 
 import (
+	"context"
 	"fmt"
 	"log"
+	"net/http"
+	"os"
+	"os/signal"
+	"syscall"
 	"time"
 
 	"github.com/gin-gonic/gin"
@@ -26,6 +31,12 @@ import (
 	tenantservice "github.com/henryzhuhr/iam-superpowers/internal/tenant/service"
 	userservice "github.com/henryzhuhr/iam-superpowers/internal/user/service"
 	userhandler "github.com/henryzhuhr/iam-superpowers/internal/user/handler"
+)
+
+const (
+	defaultRateLimit     = 100 // requests per minute
+	adminRoleName        = "admin"
+	shutdownTimeout      = 15 * time.Second
 )
 
 func main() {
@@ -86,7 +97,7 @@ func main() {
 	// Global middleware
 	r.Use(middleware.Recovery())
 	r.Use(middleware.CORS())
-	r.Use(middleware.RateLimiter(redis.RDB(), 100, 1*time.Minute))
+	r.Use(middleware.RateLimiter(redis.RDB(), defaultRateLimit, 1*time.Minute))
 
 	// Public auth routes
 	auth := r.Group("/api/v1/auth")
@@ -108,7 +119,7 @@ func main() {
 
 		// Admin routes
 		admin := protected.Group("/admin")
-		admin.Use(middleware.RequireRole("admin"))
+		admin.Use(middleware.RequireRole(adminRoleName))
 		{
 			admin.GET("/users", adminH.ListUsers)
 			admin.GET("/users/:id", adminH.GetUser)
@@ -130,8 +141,32 @@ func main() {
 	}
 
 	addr := fmt.Sprintf(":%d", cfg.Server.Port)
-	log.Printf("server starting on %s", addr)
-	if err := r.Run(addr); err != nil {
-		log.Fatalf("server failed: %v", err)
+	srv := &http.Server{
+		Addr:    addr,
+		Handler: r,
 	}
+
+	// Start server in goroutine
+	go func() {
+		log.Printf("server starting on %s", addr)
+		if err := srv.ListenAndServe(); err != nil && err != http.ErrServerClosed {
+			log.Fatalf("server failed: %v", err)
+		}
+	}()
+
+	// Wait for interrupt signal
+	quit := make(chan os.Signal, 1)
+	signal.Notify(quit, syscall.SIGINT, syscall.SIGTERM)
+	<-quit
+
+	log.Println("shutting down server...")
+
+	ctx, cancel := context.WithTimeout(context.Background(), shutdownTimeout)
+	defer cancel()
+
+	if err := srv.Shutdown(ctx); err != nil {
+		log.Fatalf("server forced to shutdown: %v", err)
+	}
+
+	log.Println("server stopped")
 }
