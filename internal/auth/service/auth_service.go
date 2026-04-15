@@ -1,0 +1,162 @@
+package service
+
+import (
+	"context"
+	"fmt"
+	"math/rand"
+	"time"
+
+	"github.com/google/uuid"
+	"github.com/henryzhuhr/iam-superpowers/internal/auth/domain"
+	"github.com/henryzhuhr/iam-superpowers/internal/auth/repository"
+	"github.com/henryzhuhr/iam-superpowers/internal/common/email"
+	"github.com/henryzhuhr/iam-superpowers/internal/common/errors"
+	"github.com/henryzhuhr/iam-superpowers/internal/common/jwt"
+	"github.com/redis/go-redis/v9"
+)
+
+type AuthService struct {
+	userRepo repository.UserRepository
+	jwtSvc   *jwt.Service
+	emailSvc *email.Service
+	redis    *redis.Client
+}
+
+func NewAuthService(userRepo repository.UserRepository, jwtSvc *jwt.Service, emailSvc *email.Service, redis *redis.Client) *AuthService {
+	return &AuthService{
+		userRepo: userRepo,
+		jwtSvc:   jwtSvc,
+		emailSvc: emailSvc,
+		redis:    redis,
+	}
+}
+
+func (s *AuthService) Register(ctx context.Context, tenantID uuid.UUID, email, password string) (*domain.User, error) {
+	existing, err := s.userRepo.FindByEmailAndTenant(ctx, email, tenantID)
+	if err != nil {
+		return nil, errors.NewInternalError("failed to check user existence")
+	}
+	if existing != nil {
+		return nil, errors.NewConflictError("email already registered in this tenant")
+	}
+
+	user, err := domain.NewUser(tenantID, email, password)
+	if err != nil {
+		if err == domain.ErrWeakPassword {
+			return nil, errors.NewValidationError(err.Error())
+		}
+		return nil, errors.NewInternalError("failed to create user")
+	}
+
+	if err := s.userRepo.Create(ctx, user); err != nil {
+		return nil, errors.NewInternalError("failed to save user")
+	}
+
+	// Send verification code
+	code := fmt.Sprintf("%06d", rand.Intn(1000000))
+	s.redis.Set(ctx, fmt.Sprintf("email_verify:%s", email), code, 5*time.Minute)
+	go func() {
+		_ = s.emailSvc.SendVerificationCode(email, code)
+	}()
+
+	return user, nil
+}
+
+func (s *AuthService) Login(ctx context.Context, email, password string, tenantID uuid.UUID) (*jwt.TokenPair, error) {
+	user, err := s.userRepo.FindByEmailAndTenant(ctx, email, tenantID)
+	if err != nil {
+		return nil, errors.NewInternalError("failed to find user")
+	}
+	if user == nil {
+		return nil, errors.NewUnauthorizedError("invalid email or password")
+	}
+
+	if err := user.VerifyPassword(password); err != nil {
+		user.RecordFailedLogin()
+		_ = s.userRepo.Update(ctx, user)
+		if user.Status == domain.StatusLocked {
+			return nil, errors.NewUnauthorizedError("account is locked due to too many failed attempts")
+		}
+		return nil, errors.NewUnauthorizedError("invalid email or password")
+	}
+
+	user.RecordSuccessfulLogin()
+	_ = s.userRepo.Update(ctx, user)
+
+	// Get user roles
+	roles := []string{"user"} // TODO: fetch from DB
+
+	tokenPair, err := s.jwtSvc.GenerateTokenPair(user.ID.String(), user.TenantID.String(), roles)
+	if err != nil {
+		return nil, errors.NewInternalError("failed to generate tokens")
+	}
+
+	// Store refresh token in Redis
+	refreshKey := fmt.Sprintf("refresh:%s:%s", user.ID, tokenPair.RefreshToken)
+	s.redis.Set(ctx, refreshKey, user.ID.String(), 7*24*time.Hour)
+
+	return tokenPair, nil
+}
+
+func (s *AuthService) Refresh(ctx context.Context, userID, refreshToken string) (*jwt.TokenPair, error) {
+	oldKey := fmt.Sprintf("refresh:%s:%s", userID, refreshToken)
+	val, err := s.redis.Get(ctx, oldKey).Result()
+	if err == redis.Nil {
+		return nil, errors.NewUnauthorizedError("invalid refresh token")
+	}
+	if val == "" {
+		return nil, errors.NewUnauthorizedError("invalid refresh token")
+	}
+
+	// Delete old token (rotation)
+	s.redis.Del(ctx, oldKey)
+
+	// Find user to get tenant and roles
+	userIDUUID, _ := uuid.Parse(userID)
+	user, err := s.userRepo.FindByID(ctx, userIDUUID)
+	if err != nil || user == nil {
+		return nil, errors.NewUnauthorizedError("user not found")
+	}
+
+	roles := []string{"user"} // TODO: fetch from DB
+	tokenPair, err := s.jwtSvc.GenerateTokenPair(user.ID.String(), user.TenantID.String(), roles)
+	if err != nil {
+		return nil, errors.NewInternalError("failed to generate tokens")
+	}
+
+	// Store new refresh token
+	newKey := fmt.Sprintf("refresh:%s:%s", user.ID, tokenPair.RefreshToken)
+	s.redis.Set(ctx, newKey, user.ID.String(), 7*24*time.Hour)
+
+	return tokenPair, nil
+}
+
+func (s *AuthService) Logout(ctx context.Context, userID, refreshToken, jti string) error {
+	// Delete refresh token
+	oldKey := fmt.Sprintf("refresh:%s:%s", userID, refreshToken)
+	s.redis.Del(ctx, oldKey)
+
+	// Blacklist JWT
+	if jti != "" {
+		s.redis.Set(ctx, fmt.Sprintf("jwt_blacklist:%s", jti), "1", 15*time.Minute)
+	}
+
+	return nil
+}
+
+func (s *AuthService) VerifyEmail(ctx context.Context, email, code string) error {
+	stored, err := s.redis.Get(ctx, fmt.Sprintf("email_verify:%s", email)).Result()
+	if err == redis.Nil {
+		return errors.NewValidationError("verification code expired or not found")
+	}
+	if stored != code {
+		return errors.NewValidationError("invalid verification code")
+	}
+
+	s.redis.Del(ctx, fmt.Sprintf("email_verify:%s", email))
+
+	// Update user
+	// TODO: need to find user by email and set email_verified = true
+
+	return nil
+}
