@@ -35,7 +35,10 @@ func (s *RoleService) ListRoles(ctx context.Context, tenantID uuid.UUID) ([]*dom
 
 func (s *RoleService) AssignRoleToUser(ctx context.Context, userID, roleID, tenantID uuid.UUID) error {
 	role, err := s.repo.FindByID(ctx, roleID)
-	if err != nil || role == nil {
+	if err != nil {
+		return errors.NewInternalError("failed to look up role")
+	}
+	if role == nil {
 		return errors.NewNotFoundError("role not found")
 	}
 	if role.TenantID != tenantID {
@@ -49,7 +52,7 @@ func (s *RoleService) AssignRoleToUser(ctx context.Context, userID, roleID, tena
 		TenantID: tenantID,
 	}
 	if err := s.repo.AssignRoleToUser(ctx, userRole); err != nil {
-		return errors.NewInternalError("failed to assign role")
+		return errors.NewConflictError("role is already assigned to this user")
 	}
 	return nil
 }
