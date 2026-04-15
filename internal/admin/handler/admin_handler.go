@@ -258,7 +258,8 @@ func (h *AdminHandler) GetUserRoles(c *gin.Context) {
 
 	roles, err := h.roleSvc.GetUserRoles(c.Request.Context(), userID, tenantID)
 	if err != nil {
-		if apiErr, ok := err.(*apierrors.APIError); ok {
+		var apiErr *apierrors.APIError
+		if errors.As(err, &apiErr) {
 			apierrors.RespondError(c, apiErr)
 		} else {
 			apierrors.RespondError(c, apierrors.NewInternalError("failed to get user roles"))
@@ -282,7 +283,8 @@ func (h *AdminHandler) ListTenants(c *gin.Context) {
 
 	tenants, count, err := h.tenantSvc.ListTenants(c.Request.Context(), offset, limit)
 	if err != nil {
-		if apiErr, ok := err.(*apierrors.APIError); ok {
+		var apiErr *apierrors.APIError
+		if errors.As(err, &apiErr) {
 			apierrors.RespondError(c, apiErr)
 		} else {
 			apierrors.RespondError(c, apierrors.NewInternalError("failed to list tenants"))
@@ -357,7 +359,8 @@ func (h *AdminHandler) ListRoles(c *gin.Context) {
 
 	roles, err := h.roleSvc.ListRoles(c.Request.Context(), tenantID)
 	if err != nil {
-		if apiErr, ok := err.(*apierrors.APIError); ok {
+		var apiErr *apierrors.APIError
+		if errors.As(err, &apiErr) {
 			apierrors.RespondError(c, apiErr)
 		} else {
 			apierrors.RespondError(c, apierrors.NewInternalError("failed to list roles"))
@@ -388,7 +391,8 @@ func (h *AdminHandler) CreateRole(c *gin.Context) {
 
 	role, err := h.roleSvc.CreateRole(c.Request.Context(), tenantID, req.Name, req.Description)
 	if err != nil {
-		if apiErr, ok := err.(*apierrors.APIError); ok {
+		var apiErr *apierrors.APIError
+		if errors.As(err, &apiErr) {
 			apierrors.RespondError(c, apiErr)
 		} else {
 			apierrors.RespondError(c, apierrors.NewInternalError("failed to create role"))
