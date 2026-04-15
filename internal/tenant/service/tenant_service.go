@@ -18,7 +18,10 @@ func NewTenantService(repo repository.TenantRepository) *TenantService {
 }
 
 func (s *TenantService) CreateTenant(ctx context.Context, name, uniqueCode string) (*domain.Tenant, error) {
-	existing, _ := s.repo.FindByCode(ctx, uniqueCode)
+	existing, err := s.repo.FindByCode(ctx, uniqueCode)
+	if err != nil {
+		return nil, errors.NewInternalError("failed to check tenant existence")
+	}
 	if existing != nil {
 		return nil, errors.NewConflictError("tenant code already exists")
 	}
@@ -57,6 +60,9 @@ func (s *TenantService) ListTenants(ctx context.Context, offset, limit int) ([]*
 	if err != nil {
 		return nil, 0, errors.NewInternalError("failed to list tenants")
 	}
-	count, _ := s.repo.Count(ctx)
+	count, err := s.repo.Count(ctx)
+	if err != nil {
+		return nil, 0, errors.NewInternalError("failed to count tenants")
+	}
 	return tenants, count, nil
 }

@@ -2,7 +2,6 @@ package repository
 
 import (
 	"context"
-	"fmt"
 
 	"github.com/google/uuid"
 	"github.com/henryzhuhr/iam-superpowers/internal/common/database"
@@ -85,6 +84,3 @@ func (r *pgxTenantRepo) Count(ctx context.Context) (int, error) {
 	err := r.db.Pool.QueryRow(ctx, `SELECT COUNT(*) FROM tenants`).Scan(&count)
 	return count, err
 }
-
-// Suppress unused import error
-var _ = fmt.Sprintf
