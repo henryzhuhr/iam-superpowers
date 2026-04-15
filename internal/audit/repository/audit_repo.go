@@ -24,8 +24,11 @@ func NewAuditRepository(db *database.DB) AuditRepository {
 }
 
 func (r *pgxAuditRepo) Create(ctx context.Context, log *domain.AuditLog) error {
-	detailsJSON, _ := json.Marshal(log.Details)
-	_, err := r.db.Pool.Exec(ctx,
+	detailsJSON, err := json.Marshal(log.Details)
+	if err != nil {
+		return err
+	}
+	_, err = r.db.Pool.Exec(ctx,
 		`INSERT INTO audit_logs (id, tenant_id, user_id, action, target_type, target_id, details, ip_address)
 		 VALUES ($1, $2, $3, $4, $5, $6, $7, $8)`,
 		log.ID, log.TenantID, log.UserID, log.Action, log.TargetType, log.TargetID, detailsJSON, log.IPAddress,
