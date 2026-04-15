@@ -16,3 +16,6 @@ bin/
 
 # Local settings
 .claude/settings.local.json
+
+# Worktrees
+.worktrees/
