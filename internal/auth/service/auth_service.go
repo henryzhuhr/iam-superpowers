@@ -2,8 +2,10 @@ package service
 
 import (
 	"context"
+	"crypto/rand"
 	"fmt"
-	"math/rand"
+	"log/slog"
+	"math/big"
 	"time"
 
 	"github.com/google/uuid"
@@ -53,10 +55,15 @@ func (s *AuthService) Register(ctx context.Context, tenantID uuid.UUID, email, p
 	}
 
 	// Send verification code
-	code := fmt.Sprintf("%06d", rand.Intn(1000000))
+	code, err := generateVerificationCode()
+	if err != nil {
+		return nil, errors.NewInternalError("failed to generate verification code")
+	}
 	s.redis.Set(ctx, fmt.Sprintf("email_verify:%s", email), code, 5*time.Minute)
 	go func() {
-		_ = s.emailSvc.SendVerificationCode(email, code)
+		if err := s.emailSvc.SendVerificationCode(email, code); err != nil {
+			slog.Error("failed to send verification email", "email", email, "error", err)
+		}
 	}()
 
 	return user, nil
@@ -74,9 +81,6 @@ func (s *AuthService) Login(ctx context.Context, email, password string, tenantI
 	if err := user.VerifyPassword(password); err != nil {
 		user.RecordFailedLogin()
 		_ = s.userRepo.Update(ctx, user)
-		if user.Status == domain.StatusLocked {
-			return nil, errors.NewUnauthorizedError("account is locked due to too many failed attempts")
-		}
 		return nil, errors.NewUnauthorizedError("invalid email or password")
 	}
 
@@ -112,7 +116,10 @@ func (s *AuthService) Refresh(ctx context.Context, userID, refreshToken string) 
 	s.redis.Del(ctx, oldKey)
 
 	// Find user to get tenant and roles
-	userIDUUID, _ := uuid.Parse(userID)
+	userIDUUID, err := uuid.Parse(userID)
+	if err != nil {
+		return nil, errors.NewUnauthorizedError("invalid user ID")
+	}
 	user, err := s.userRepo.FindByID(ctx, userIDUUID)
 	if err != nil || user == nil {
 		return nil, errors.NewUnauthorizedError("user not found")
@@ -159,4 +166,13 @@ func (s *AuthService) VerifyEmail(ctx context.Context, email, code string) error
 	// TODO: need to find user by email and set email_verified = true
 
 	return nil
+}
+
+// generateVerificationCode generates a cryptographically secure 6-digit code.
+func generateVerificationCode() (string, error) {
+	n, err := rand.Int(rand.Reader, big.NewInt(1000000))
+	if err != nil {
+		return "", err
+	}
+	return fmt.Sprintf("%06d", n.Int64()), nil
 }
