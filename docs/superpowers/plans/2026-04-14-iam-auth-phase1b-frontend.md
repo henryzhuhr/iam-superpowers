@@ -6,7 +6,7 @@
 
 **Architecture:** Vue 3 SPA with Vite, Element Plus UI, Pinia state management, Vue Router, Axios for API calls. Communicates with the backend from Phase 1A.
 
-**Tech Stack:** Vue 3 + TypeScript + Vite + Element Plus + Pinia + Vue Router + Axios + Playwright
+**Tech Stack:** Vue 3 + TypeScript + Vite + Element Plus + Pinia + Vue Router + Axios + Playwright + agent-browser（有头模式 --headed）
 
 ---
 
@@ -1538,7 +1538,29 @@ make test-e2e-web
 
 Expected: All Playwright tests pass.
 
-- [ ] **Step 3: Commit**
+- [ ] **Step 3: agent-browser 有头模式页面验证**
+
+使用 agent-browser --headed 逐页验证前端：
+
+```bash
+# 登录页
+agent-browser --headed open http://localhost:5173/login
+# 验证：表单渲染、输入框、按钮、错误提示
+
+# 仪表盘（登录后）
+agent-browser --headed open http://localhost:5173/dashboard
+# 验证：侧边栏导航、统计卡片、最近活动
+
+# 用户管理
+agent-browser --headed open http://localhost:5173/users
+# 验证：表格渲染、搜索框、分页、操作按钮
+
+# 租户管理、角色管理、操作日志同理
+```
+
+**注意**：必须使用 `--headed` 标志打开可见浏览器窗口，便于实时观察页面操作结果。
+
+- [ ] **Step 4: Commit**
 
 ```bash
 git add .
