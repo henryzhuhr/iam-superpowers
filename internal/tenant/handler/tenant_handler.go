@@ -26,8 +26,17 @@ type CreateTenantRequest struct {
 }
 
 func (h *TenantHandler) ListTenants(c *gin.Context) {
-	offset, _ := strconv.Atoi(c.DefaultQuery("offset", "0"))
-	limit, _ := strconv.Atoi(c.DefaultQuery("limit", "20"))
+	offset, err := strconv.Atoi(c.DefaultQuery("offset", "0"))
+	if err != nil || offset < 0 {
+		offset = 0
+	}
+	limit, err := strconv.Atoi(c.DefaultQuery("limit", "20"))
+	if err != nil || limit <= 0 {
+		limit = 20
+	}
+	if limit > 100 {
+		limit = 100
+	}
 
 	tenants, count, err := h.svc.ListTenants(c.Request.Context(), offset, limit)
 	if err != nil {
@@ -76,7 +85,7 @@ func (h *TenantHandler) CreateTenant(c *gin.Context) {
 		return
 	}
 
-	tenant, err := h.svc.CreateTenant(c.Request.Context(), req.Name, req.UniqueCode)
+	tenant, err := h.svc.CreateTenant(c.Request.Context(), req.Name, req.UniqueCode, req.CustomDomain)
 	if err != nil {
 		var apiErr *apierrors.APIError
 		if stderrors.As(err, &apiErr) {

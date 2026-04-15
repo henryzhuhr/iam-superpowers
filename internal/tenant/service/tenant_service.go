@@ -17,7 +17,7 @@ func NewTenantService(repo repository.TenantRepository) *TenantService {
 	return &TenantService{repo: repo}
 }
 
-func (s *TenantService) CreateTenant(ctx context.Context, name, uniqueCode string) (*domain.Tenant, error) {
+func (s *TenantService) CreateTenant(ctx context.Context, name, uniqueCode, customDomain string) (*domain.Tenant, error) {
 	existing, err := s.repo.FindByCode(ctx, uniqueCode)
 	if err != nil {
 		return nil, errors.NewInternalError("failed to check tenant existence")
@@ -27,6 +27,7 @@ func (s *TenantService) CreateTenant(ctx context.Context, name, uniqueCode strin
 	}
 
 	tenant := domain.NewTenant(name, uniqueCode)
+	tenant.CustomDomain = customDomain
 	if err := s.repo.Create(ctx, tenant); err != nil {
 		return nil, errors.NewInternalError("failed to create tenant")
 	}
