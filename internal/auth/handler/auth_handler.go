@@ -2,6 +2,7 @@ package handler
 
 import (
 	"errors"
+	"net/http"
 
 	"github.com/gin-gonic/gin"
 	"github.com/google/uuid"
@@ -69,7 +70,7 @@ func (h *AuthHandler) Login(c *gin.Context) {
 		return
 	}
 
-	stderrors.Respond(c, 200, gin.H{
+	stderrors.Respond(c, http.StatusOK, gin.H{
 		"access_token":  tokens.AccessToken,
 		"refresh_token": tokens.RefreshToken,
 		"expires_in":    tokens.ExpiresIn,
@@ -95,7 +96,7 @@ func (h *AuthHandler) Refresh(c *gin.Context) {
 		return
 	}
 
-	stderrors.Respond(c, 200, gin.H{
+	stderrors.Respond(c, http.StatusOK, gin.H{
 		"access_token":  tokens.AccessToken,
 		"refresh_token": tokens.RefreshToken,
 		"expires_in":    tokens.ExpiresIn,
@@ -105,10 +106,13 @@ func (h *AuthHandler) Refresh(c *gin.Context) {
 func (h *AuthHandler) Logout(c *gin.Context) {
 	userID := c.GetString(middleware.ContextKeyUserID)
 	var req RefreshRequest
-	_ = c.ShouldBindJSON(&req)
+	if err := c.ShouldBindJSON(&req); err != nil {
+		// Refresh token in body is optional; if missing, only blacklist the access token via JTI
+		req.RefreshToken = ""
+	}
 
 	_ = h.authSvc.Logout(c.Request.Context(), userID, req.RefreshToken, "")
-	stderrors.Respond(c, 200, gin.H{"message": "logged out successfully"})
+	stderrors.Respond(c, http.StatusOK, gin.H{"message": "logged out successfully"})
 }
 
 func (h *AuthHandler) VerifyEmail(c *gin.Context) {
@@ -129,5 +133,5 @@ func (h *AuthHandler) VerifyEmail(c *gin.Context) {
 		return
 	}
 
-	stderrors.Respond(c, 200, gin.H{"message": "email verified successfully"})
+	stderrors.Respond(c, http.StatusOK, gin.H{"message": "email verified successfully"})
 }
