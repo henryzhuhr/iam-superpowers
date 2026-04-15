@@ -29,8 +29,15 @@ func (s *UserService) GetProfile(ctx context.Context, userID uuid.UUID) (*domain
 }
 
 func (s *UserService) UpdateProfile(ctx context.Context, userID uuid.UUID, name, avatarURL string) error {
+	if len(name) > 100 {
+		return errors.NewValidationError("name must be 100 characters or less")
+	}
+
 	user, err := s.userRepo.FindByID(ctx, userID)
-	if err != nil || user == nil {
+	if err != nil {
+		return errors.NewInternalError("failed to find user")
+	}
+	if user == nil {
 		return errors.NewNotFoundError("user not found")
 	}
 
@@ -41,7 +48,10 @@ func (s *UserService) UpdateProfile(ctx context.Context, userID uuid.UUID, name,
 
 func (s *UserService) ChangePassword(ctx context.Context, userID uuid.UUID, oldPassword, newPassword string) error {
 	user, err := s.userRepo.FindByID(ctx, userID)
-	if err != nil || user == nil {
+	if err != nil {
+		return errors.NewInternalError("failed to find user")
+	}
+	if user == nil {
 		return errors.NewNotFoundError("user not found")
 	}
 
